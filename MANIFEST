@@ -1,5 +1,4 @@
 Changes
-field_legend.txt
 inc/Module/Install.pm
 inc/Module/Install/Base.pm
 inc/Module/Install/Can.pm
@@ -18,4 +17,3 @@ t/data/ontario.txt
 t/parse.t
 t/pod-coverage.t
 t/pod.t
-wind-towers.pl
