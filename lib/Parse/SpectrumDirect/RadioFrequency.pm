@@ -198,8 +198,42 @@ sub _extract_stations
 		@row{@key_ary} = map { s/^\s+|\s+$//g; $_ } @tmprow;
 		push @{$self->{stations}}, \%row;
 	}
+	$self->_fixup_station_data();
 
 	return $self->{stations};
+}
+
+# Fix some common stupidity with station data
+sub _fixup_station_data
+{
+	my ($self) = @_;
+
+
+	# Convert to decimal degrees from ddmmss.  Also, force
+	# longitude to west (negative), since this is Canada we're
+	# dealing with.
+	foreach my $s (@{$self->{stations}}) {
+		$s->{Latitude} = _dd_from_dms( $s->{Latitude} ) if exists $s->{Latitude};
+		$s->{Longitude} = 0 - _dd_from_dms( $s->{Longitude} ) if exists $s->{Longitude};
+	}
+
+	# Change units in legend, too
+	foreach my $l (@{$self->{legend}}) {
+		if( $l->{key} =~ /^(Latitude|Longitude)$/ ) {
+			$l->{units} = 'decimal degrees';
+		}
+	}
+}
+
+sub _dd_from_dms
+{
+	my ($dms) = @_;
+
+	my $ss = substr( $dms, -2, 2, '');
+	my $mm = substr( $dms, -2, 2, '');
+	my $dd = $dms;
+
+	return sprintf('%.6f', $dd + ($mm * 60 + $ss)/3600);
 }
 
 

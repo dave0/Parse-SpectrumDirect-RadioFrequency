@@ -108,10 +108,6 @@ foreach my $row (@ottawa_towers ) {
 	$row->{Station_Location} =~ s/^(.*?)\s+\((.*?)\)\s*(.*?)?$/$2, $1, $3/;
 	$row->{Station_Location} =~ s/,\s+$/, ON/;
 
-	# Convert to decimal degrees from ddmmss.  Also, force longitude to west (negative).
-	$row->{Latitude} = dd_from_dms( $row->{Latitude} );
-	$row->{Longitude} = 0 - dd_from_dms( $row->{Longitude} );
-
 	# Make a completely wild-ass guess about the range of these towers.
 	#
 	# modified Friis Transmission Equation from
@@ -181,17 +177,6 @@ sub retrieve_content
 	$content =~ s/\r\n/\n/g;
 
 	return $content;
-}
-
-sub dd_from_dms
-{
-	my ($dms) = @_;
-
-	my $ss = substr( $dms, -2, 2, '');
-	my $mm = substr( $dms, -2, 2, '');
-	my $dd = $dms;
-
-	return sprintf('%.6f', $dd + ($mm * 60 + $ss)/3600);
 }
 
 sub guess_metro_area
