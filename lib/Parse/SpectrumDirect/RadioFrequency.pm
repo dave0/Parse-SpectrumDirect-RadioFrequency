@@ -68,6 +68,8 @@ sub parse
 	delete $self->{legend};
 	delete $self->{stations};
 
+	return undef unless $raw;
+
 	if( ! $self->_extract_legend( $raw ) ) {
 		delete $self->{legend};
 		return undef;
@@ -213,13 +215,13 @@ sub _fixup_station_data
 	# longitude to west (negative), since this is Canada we're
 	# dealing with.
 	foreach my $s (@{$self->{stations}}) {
-		$s->{Latitude} = _dd_from_dms( $s->{Latitude} ) if exists $s->{Latitude};
+		$s->{Latitude}  = _dd_from_dms( $s->{Latitude} ) if exists $s->{Latitude};
 		$s->{Longitude} = 0 - _dd_from_dms( $s->{Longitude} ) if exists $s->{Longitude};
 	}
 
 	# Change units in legend, too
 	foreach my $l (@{$self->{legend}}) {
-		if( $l->{key} =~ /^(Latitude|Longitude)$/ ) {
+		if( $l->{key} =~ /^(?:Latitude|Longitude)$/ ) {
 			$l->{units} = 'decimal degrees';
 		}
 	}
@@ -228,6 +230,8 @@ sub _fixup_station_data
 sub _dd_from_dms
 {
 	my ($dms) = @_;
+
+	return 0.0 unless $dms;
 
 	my $ss = substr( $dms, -2, 2, '');
 	my $mm = substr( $dms, -2, 2, '');
