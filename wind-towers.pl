@@ -4,6 +4,8 @@ use warnings;
 use LWP::Simple;
 use Data::Dumper;
 use Getopt::Long;
+use lib qw( lib );
+use Parse::SpectrumDirect::RadioFrequency;
 
 # This script fetches Industry Canada "Spectrum Direct" information and grovels
 # through it to display data about Wind Mobile towers.  Currently, it will spit
@@ -47,6 +49,7 @@ my %admin_areas = (
 	quebec  => 51,
 );
 
+my $parser = Parse::SpectrumDirect::RadioFrequency->new();
 my @data_rows;
 while( my ($name, $area) = each %admin_areas ) {
 	warn "Fetching data for $name";
@@ -56,10 +59,9 @@ while( my ($name, $area) = each %admin_areas ) {
 		. "&company_cd=$wind_company_cd";
 
 	my $content = retrieve_content( $url );
-	my $legend  = extract_legend( $content );
-	my $rows    = extract_data( $legend, $content );
-
-	push (@data_rows, @$rows) if $rows;
+	if( $parser->parse( $content ) ) {
+		push @data_rows, @{$parser->get_stations()};
+	}
 }
 
 # Yes, the misspellings do exist in the source data.  Industry Canada needs to hire some geography students.
@@ -76,7 +78,7 @@ my %metro_areas = (
 		TORONTON BURLIGNTON GEOGRETOWN BRULINGTON MAKRHAM TOROTNO
 		),
 		# Can't qw() these:
-		'North York', 'Richmond Hill', 'RICMOND HILL'
+		'North York', 'Richmond Hill', 'RICMOND HILL',
 	],
 );
 
@@ -179,76 +181,6 @@ sub retrieve_content
 	$content =~ s/\r\n/\n/g;
 
 	return $content;
-}
-
-# Return legend as an arrayref of hashrefs.  Each hashref contains:
-# 	name (from original legend, stripped of trailing spaces)
-# 	units (if determinable from name)
-# 	key (name stripped of unit information, whitespaces converted to _)
-# 	start (column index to start extraction)
-# 	end (column count)
-sub extract_legend
-{
-	my ($content) = @_;
-
-	my ($raw_legend) = $content =~ m/Field Position Legend(.*)/sm;
-	my $legend = [];
-	foreach my $line (split(/\n/, $raw_legend)) {
-
-		# Lines are in the format of:
-		# 	name    start - end
-		# with the columns starting at 1.
-
-		my ($name, $start, $end) = $line =~ m/(.*?)\s+(\d+) - (\d+)/;
-		next unless $name;
-		$name =~ s/\s+$//;
-
-		# Pull off units
-		my $units = undef;
-		if( $name =~ m/\((.*?)\)$/ ) {
-			$units = $1;
-		}
-
-		my $key = $name;
-		$key =~ s/\(.*?\)//g;
-		$key =~ s/\s+$//;
-		$key =~ s/\s+/_/g;
-
-		my $col = {
-			key   => $key,
-			units => $units,
-			name  => $name,
-			start => $start - 1,
-			len   => $end - $start + 1,
-		};
-		push @$legend,$col;
-
-	}
-
-	return $legend;
-}
-
-# Return data as an arrayref of hashrefs, one per row.
-sub extract_data
-{
-	my ($legend, $content) = @_;
-
-	my $regex   = join('\s', map { "(.{$_->{len},$_->{len}})" } @$legend );
-	my @key_ary = map { $_->{key} } @$legend;
-
-	my ($data)   = $content =~ m/\[DATA\](.*)\[\/DATA\]/sm;
-	my @rows;
-	foreach my $line (split(/\n/,$data)) {
-		my (@tmprow) = $line =~ /$regex/o;
-
-		my %row;
-
-		@tmprow = map { s/^\s+//; $_ } @tmprow;
-		@row{@key_ary} = map { s/\s+$//; $_ } @tmprow;
-		push @rows, \%row;
-	}
-
-	return \@rows;
 }
 
 sub dd_from_dms

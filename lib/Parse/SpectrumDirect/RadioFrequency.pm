@@ -24,6 +24,9 @@ etc.
 
 The service is available at http://www.ic.gc.ca/eic/site/sd-sd.nsf/eng/home
 
+The text export is a series of fixed-width fields, with field locations and
+descriptions present in a legend at the end of the data file.
+
 =head1 SYNOPSIS
 
     my $parser = Parse::SpectrumDirect::RadioFrequency->new();
@@ -50,7 +53,7 @@ sub new
 	return bless({},$class);
 }
 
-=item parse ( $data )
+=item parse ( $raw )
 
 Parses the raw data provided.  Returns a true value if successful, a false if
 not.
@@ -61,12 +64,54 @@ Parsed data can be obtained with get_legend() and get_stations() (see below).
 
 sub parse
 {
-	my ($self) = @_;
+	my ($self, $raw) = @_;
+	delete $self->{legend};
+	delete $self->{stations};
+
+	if( ! $self->_extract_legend( $raw ) ) {
+		delete $self->{legend};
+		return undef;
+	}
+	if( ! $self->_extract_stations( $raw ) ) {
+		delete $self->{legend};
+		delete $self->{stations};
+		return undef;
+	}
+
+	return 1;
 }
 
 =item get_legend ()
 
 Returns the description of fields as parsed from the input data.
+
+Return value is an array reference containing one hash reference per field. 
+
+Each hashref contains:
+
+=over 4
+
+=item name
+
+As in source legend, stripped of trailing spaces
+
+=item units
+
+Units for data value, if determinable from legend.
+
+=item key
+
+Key used in station hashes.  Generated from name stripped of unit information, and whitespaces converted to _.
+
+=item start
+
+Column index to start extracting data value
+
+=item len
+
+Column width, used for data extraction.
+
+=back
 
 =cut
 
@@ -89,6 +134,74 @@ sub get_stations
 	my ($self) = @_;
 	return $self->{stations};
 }
+
+# Extract legend as an arrayref of hashrefs.
+sub _extract_legend
+{
+	my ($self, $raw) = @_;
+
+	my ($raw_legend) = $raw =~ m/Field Position Legend(.*)/sm;
+	return undef unless $raw_legend;
+
+	$self->{legend} = [];
+	foreach my $line (split(/\n/, $raw_legend)) {
+
+		# Lines are in the format of:
+		# 	name    start - end
+		# with the columns starting at 1.
+
+		my ($name, $start, $end) = $line =~ m/(.*?)\s+(\d+) - (\d+)/;
+		next unless $name;
+		$name =~ s/\s+$//;
+
+		# Pull off units
+		my $units = undef;
+		if( $name =~ m/\((.*?)\)$/ ) {
+			$units = $1;
+		}
+
+		my $key = $name;
+		$key =~ s/\(.*?\)//g;
+		$key =~ s/\s+$//;
+		$key =~ s/\s+/_/g;
+
+		my $col = {
+			key   => $key,
+			units => $units,
+			name  => $name,
+			start => $start - 1,
+			len   => $end - $start + 1,
+		};
+		push @{$self->{legend}},$col;
+
+	}
+
+	return $self->{legend};
+}
+
+# Return station data as an arrayref of hashrefs, one per row.
+sub _extract_stations
+{
+	my ($self, $raw) = @_;
+
+	my ($data)   = $raw =~ m/\[DATA\](.*)\[\/DATA\]/sm;
+	return undef unless $data;
+
+	my $regex   = join('\s', map { "(.{$_->{len},$_->{len}})" } @{$self->{legend}} );
+	my @key_ary = map { $_->{key} } @{$self->{legend}};
+
+	$self->{stations} = [];
+	foreach my $line (split(/\n/,$data)) {
+		my (@tmprow) = $line =~ /$regex/o;
+
+		my %row;
+		@row{@key_ary} = map { s/^\s+|\s+$//g; $_ } @tmprow;
+		push @{$self->{stations}}, \%row;
+	}
+
+	return $self->{stations};
+}
+
 
 1;
 __END__
